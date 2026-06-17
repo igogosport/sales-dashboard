@@ -4,6 +4,7 @@ import MonthlyChart from './components/MonthlyChart'
 import BrandChart from './components/BrandChart'
 import ChannelPie from './components/ChannelPie'
 import SyncPanel from './components/SyncPanel'
+import UploadModal from './components/UploadModal'
 import {
   getFilters, getSummary, getMonthlyTrend,
   getByBrand, getByChannel,
@@ -17,6 +18,7 @@ export default function App() {
   const [brand, setBrand] = useState('')
   const [channel, setChannel] = useState('')
   const [tab, setTab] = useState(TAB.SALES)
+  const [showUpload, setShowUpload] = useState(false)
 
   const [summary, setSummary] = useState(null)
   const [monthly, setMonthly] = useState([])
@@ -92,6 +94,15 @@ export default function App() {
             <option value=''>全部通路</option>
             {filters.channels.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          <button
+            onClick={() => setShowUpload(true)}
+            style={{
+              background: '#1d4ed8', border: 'none',
+              color: '#fff', padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+            }}
+          >
+            ↑ 上傳銷售 CSV
+          </button>
           <SyncPanel onSync={loadData} />
         </div>
       </header>
@@ -150,6 +161,13 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {showUpload && (
+        <UploadModal
+          onClose={() => setShowUpload(false)}
+          onSuccess={() => { setShowUpload(false); loadData() }}
+        />
+      )}
 
       <footer style={{ padding: '10px 24px', borderTop: '1px solid var(--border)', color: 'var(--text2)', fontSize: 11, display: 'flex', justifyContent: 'space-between' }}>
         <span>資料來源：ECOUNT ERP + Google Sheets</span>
