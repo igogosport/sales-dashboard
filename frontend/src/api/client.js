@@ -1,6 +1,8 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api' })
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
+})
 
 export const getFilters = () => api.get('/sales/filters').then(r => r.data)
 export const getSummary = (params) => api.get('/sales/summary', { params }).then(r => r.data)
