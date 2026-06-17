@@ -24,6 +24,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 SHEET_PO = "✨在途採購表"
 SHEET_IN = "每日庫存IN"
+SHEET_REORDER_GID = 477337278   # 補貨規劃表 (gid from URL)
 
 
 def _get_client() -> gspread.Client:
@@ -119,6 +120,75 @@ def fetch_daily_in() -> list[dict]:
             "receipt_no": receipt_no,
             "product_code": product_code,
             "actual_qty": actual_qty,
+        })
+
+    return result
+
+
+# ── 補貨規劃表 ──────────────────────────────────────────────────────────────
+
+# Header columns (0-indexed):
+# 0=狀態, 1=商品ID, 2=品牌, 3=商品名稱, 4=類別,
+# 5=成長率, 6=成長率係數, 7=安庫月數, 8=未來+2+3銷售佔比, 9=季節係數,
+# 10=安全庫存, 11=交期, 12=再訂購點, 13=需訂購量, 14=東興庫存,
+# 15=是否補貨, 16=銷售月數, 17=全部庫存, 18=平均3個月月銷,
+# 19..30 = 月銷 2025/6 ~ 2026/5 (12 months)
+_MONTHLY_START_COL = 19
+_MONTHLY_HEADERS = [
+    "2025/6","2025/7","2025/8","2025/9","2025/10","2025/11","2025/12",
+    "2026/1","2026/2","2026/3","2026/4","2026/5",
+]
+
+
+def fetch_reorder_plan() -> list[dict]:
+    """
+    Read the procurement reorder planning sheet (gid=477337278).
+    Returns per-product rows with inventory levels, reorder signals,
+    and 12-month sales history.
+    """
+    client = _get_client()
+    spreadsheet = client.open_by_key(settings.google_sheets_id)
+
+    ws = None
+    for w in spreadsheet.worksheets():
+        if w.id == SHEET_REORDER_GID:
+            ws = w
+            break
+    if ws is None:
+        raise ValueError(f"Cannot find worksheet with gid={SHEET_REORDER_GID}")
+
+    rows = ws.get_all_values()
+    if len(rows) < 2:
+        return []
+
+    result = []
+    for row in rows[1:]:
+        def col(idx, default=""): return row[idx] if idx < len(row) else default
+
+        product_id = col(1).strip()
+        brand = col(2).strip()
+        product_name = col(3).strip()
+        if not product_id and not product_name:
+            continue
+
+        monthly_sales = {}
+        for i, label in enumerate(_MONTHLY_HEADERS):
+            monthly_sales[label] = _to_int(col(_MONTHLY_START_COL + i))
+
+        result.append({
+            "status": col(0).strip(),
+            "product_id": product_id,
+            "brand": brand,
+            "product_name": product_name,
+            "category": col(4).strip(),
+            "total_inventory": _to_int(col(17)),
+            "avg_monthly_sales_3m": _to_int(col(18)),
+            "reorder_qty": _to_int(col(13)),
+            "safety_stock": _to_int(col(10)),
+            "lead_time_days": _to_int(col(11)),
+            "reorder_point": _to_int(col(12)),
+            "need_reorder": col(15).strip() in ("TRUE", "是", "Y", "✓"),
+            "monthly_sales": monthly_sales,
         })
 
     return result

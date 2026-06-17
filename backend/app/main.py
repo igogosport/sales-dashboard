@@ -4,7 +4,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
 from .database import engine, SessionLocal
 from . import models
-from .routers import sales, purchase, sync as sync_router
+from .routers import sales, purchase, sync as sync_router, inventory
 from .services.sync import sync_ecount, sync_gsheets
 from .config import settings
 
@@ -45,6 +45,7 @@ app.add_middleware(
 app.include_router(sales.router)
 app.include_router(purchase.router)
 app.include_router(sync_router.router)
+app.include_router(inventory.router)
 
 
 @app.get("/health")
