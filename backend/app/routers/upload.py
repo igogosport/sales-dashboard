@@ -19,7 +19,7 @@ ECOUNT 匯出的銷售 CSV 欄位對應（依實際匯出格式調整）：
 import csv
 import io
 import chardet
-from datetime import datetime
+from datetime import datetime, date
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from .. import models
@@ -55,7 +55,7 @@ FIELD_MAP = {
 }
 
 
-def _parse_date(val: str) -> datetime.date | None:
+def _parse_date(val: str) -> date | None:
     for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%Y%m%d", "%m/%d/%Y"):
         try:
             return datetime.strptime(val.strip(), fmt).date()
