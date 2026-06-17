@@ -1,0 +1,17 @@
+[build]
+builder = "DOCKERFILE"
+
+[[services]]
+name = "backend"
+source = "backend"
+[services.build]
+dockerfilePath = "backend/Dockerfile"
+[services.deploy]
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"
+
+[[services]]
+name = "frontend"
+source = "frontend"
+[services.build]
+dockerfilePath = "frontend/Dockerfile"
