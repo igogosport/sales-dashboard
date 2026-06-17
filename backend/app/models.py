@@ -29,10 +29,11 @@ class Purchase(Base):
     product_code = Column(String(100))
     product_name = Column(String(500))
     brand = Column(String(100))
-    qty = Column(Integer)
+    qty = Column(Integer)            # PO 數量
+    actual_qty = Column(Integer)     # 實收數量（from 每日庫存IN）
     unit_cost = Column(Float)
     total_cost = Column(Float)
-    supplier = Column(String(200))
+    supplier = Column(String(200))   # 進倉單號
     year = Column(Integer, index=True)
     month = Column(Integer, index=True)
 

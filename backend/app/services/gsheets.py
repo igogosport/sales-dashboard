@@ -1,13 +1,29 @@
 """
-Google Sheets integration for purchase data.
+Google Sheets integration for purchase / in-transit PO data.
+
+Sheet: ✨在途採購表
+  Col C (idx 2)  : 進倉單號
+  Col D (idx 3)  : 產品代號
+  Col F (idx 5)  : PO 數量
+  Col K (idx 10) : 盤差
+  Col O (idx 14) : 已入庫 (checkbox)
+  Col AG (idx 32): 已入庫日
+
+Sheet: 每日庫存IN
+  Col D (idx 3)  : 進倉單號
+  Col E (idx 4)  : 產品代號
+  Col G (idx 6)  : 實收數量
 """
 import json
-from datetime import datetime
+from datetime import datetime, date
 import gspread
 from google.oauth2.service_account import Credentials
 from ..config import settings
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+
+SHEET_PO = "✨在途採購表"
+SHEET_IN = "每日庫存IN"
 
 
 def _get_client() -> gspread.Client:
@@ -16,43 +32,132 @@ def _get_client() -> gspread.Client:
     return gspread.authorize(creds)
 
 
-def fetch_purchases() -> list[dict]:
+def _to_date(val) -> date | None:
+    if not val:
+        return None
+    if isinstance(val, (datetime,)):
+        return val.date()
+    if isinstance(val, date):
+        return val
+    for fmt in ("%Y/%m/%d", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(str(val).strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _to_int(val) -> int:
+    try:
+        return int(str(val).replace(",", "").strip())
+    except (ValueError, TypeError):
+        return 0
+
+
+def fetch_po_table() -> list[dict]:
     """
-    Fetch purchase rows from Google Sheets.
-    Assumes first row is header. Adjust column names to match your sheet.
+    Read ✨在途採購表 and return structured PO rows.
     """
     client = _get_client()
     sheet = client.open_by_key(settings.google_sheets_id)
-    ws = sheet.get_worksheet(0)
-    records = ws.get_all_records()
+    ws = sheet.worksheet(SHEET_PO)
+    rows = ws.get_all_values()
 
-    parsed = []
-    for row in records:
-        try:
-            date_val = row.get("採購日期") or row.get("日期") or ""
-            if isinstance(date_val, str) and date_val:
-                purchase_date = datetime.strptime(date_val, "%Y/%m/%d").date()
-            elif isinstance(date_val, datetime):
-                purchase_date = date_val.date()
-            else:
-                purchase_date = None
+    if len(rows) < 2:
+        return []
 
-            qty = int(row.get("採購數量") or row.get("數量") or 0)
-            unit_cost = float(row.get("單價") or row.get("成本") or 0)
+    result = []
+    for row in rows[1:]:  # skip header
+        def col(idx): return row[idx] if idx < len(row) else ""
 
-            parsed.append({
-                "purchase_date": purchase_date,
-                "product_code": str(row.get("品號") or row.get("商品編號") or ""),
-                "product_name": str(row.get("品名") or row.get("商品名稱") or ""),
-                "brand": str(row.get("品牌") or ""),
-                "qty": qty,
-                "unit_cost": unit_cost,
-                "total_cost": qty * unit_cost,
-                "supplier": str(row.get("供應商") or row.get("廠商") or ""),
-                "year": purchase_date.year if purchase_date else None,
-                "month": purchase_date.month if purchase_date else None,
-            })
-        except Exception:
+        receipt_no = col(2).strip()   # C
+        product_code = col(3).strip() # D
+        if not receipt_no and not product_code:
             continue
 
-    return parsed
+        po_qty = _to_int(col(5))      # F
+        discrepancy = col(10).strip() # K
+        received = col(14) == "TRUE" or col(14) is True  # O checkbox
+        received_date = _to_date(col(32))  # AG
+
+        result.append({
+            "receipt_no": receipt_no,
+            "product_code": product_code,
+            "po_qty": po_qty,
+            "discrepancy": discrepancy,
+            "received": received,
+            "received_date": received_date,
+        })
+
+    return result
+
+
+def fetch_daily_in() -> list[dict]:
+    """
+    Read 每日庫存IN and return structured inbound records.
+    """
+    client = _get_client()
+    sheet = client.open_by_key(settings.google_sheets_id)
+    ws = sheet.worksheet(SHEET_IN)
+    rows = ws.get_all_values()
+
+    if len(rows) < 2:
+        return []
+
+    result = []
+    for row in rows[1:]:
+        def col(idx): return row[idx] if idx < len(row) else ""
+
+        receipt_no = col(3).strip()   # D
+        product_code = col(4).strip() # E
+        actual_qty = _to_int(col(6))  # G
+
+        if not receipt_no or not product_code:
+            continue
+
+        result.append({
+            "receipt_no": receipt_no,
+            "product_code": product_code,
+            "actual_qty": actual_qty,
+        })
+
+    return result
+
+
+def fetch_purchases() -> list[dict]:
+    """
+    Combined view: PO table joined with actual inbound quantities.
+    Returns rows suitable for the Purchase model.
+    """
+    po_rows = fetch_po_table()
+    in_rows = fetch_daily_in()
+
+    # Build lookup: (receipt_no, product_code) -> total actual qty
+    in_map: dict[tuple, int] = {}
+    for r in in_rows:
+        key = (r["receipt_no"], r["product_code"])
+        in_map[key] = in_map.get(key, 0) + r["actual_qty"]
+
+    result = []
+    for po in po_rows:
+        key = (po["receipt_no"], po["product_code"])
+        actual = in_map.get(key, 0)
+        received_date = po["received_date"]
+        year = received_date.year if received_date else None
+        month = received_date.month if received_date else None
+
+        result.append({
+            "purchase_date": received_date,
+            "product_code": po["product_code"],
+            "product_name": "",        # add more columns if available in your sheet
+            "brand": "",
+            "qty": po["po_qty"],
+            "actual_qty": actual,
+            "unit_cost": 0.0,
+            "total_cost": 0.0,
+            "supplier": po["receipt_no"],
+            "year": year,
+            "month": month,
+        })
+
+    return result
