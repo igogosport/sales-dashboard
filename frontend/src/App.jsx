@@ -30,11 +30,10 @@ export default function App() {
   useEffect(() => {
     getFilters().then(f => {
       setFilters(f)
-      if (f.years.length) setYear(f.years[0])
+      setYear(f.years.length ? f.years[0] : new Date().getFullYear())
     }).catch(() => {
-      // API not yet available — use demo data
       setFilters({ years: [2026, 2025, 2024], brands: [], channels: [] })
-      setYear(2026)
+      setYear(new Date().getFullYear())
     })
   }, [])
 
