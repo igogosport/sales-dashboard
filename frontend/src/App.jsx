@@ -5,6 +5,7 @@ import BrandChart from './components/BrandChart'
 import ChannelPie from './components/ChannelPie'
 import SyncPanel from './components/SyncPanel'
 import UploadModal from './components/UploadModal'
+import ErrorBoundary from './components/ErrorBoundary'
 import {
   getFilters, getSummary, getMonthlyTrend,
   getByBrand, getByChannel,
@@ -134,21 +135,29 @@ export default function App() {
 
             {/* Monthly trend */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20, marginBottom: 20 }}>
-              <MonthlyChart data={[...monthly, ...prevMonthly]} title='月度銷售趨勢（與去年比較）' />
+              <ErrorBoundary key="monthly">
+                <MonthlyChart data={[...monthly, ...prevMonthly]} title='月度銷售趨勢（與去年比較）' />
+              </ErrorBoundary>
             </div>
 
             {/* Brand + Channel row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-                <BrandChart data={byBrand} title='品牌銷售排行（金額）' />
+                <ErrorBoundary key="brand-amount">
+                  <BrandChart data={byBrand} title='品牌銷售排行（金額）' />
+                </ErrorBoundary>
               </div>
               <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-                <ChannelPie data={byChannel} title='通路佔比' />
+                <ErrorBoundary key="channel-pie">
+                  <ChannelPie data={byChannel} title='通路佔比' />
+                </ErrorBoundary>
               </div>
             </div>
 
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 20 }}>
-              <BrandChart data={byBrand} title='品牌銷售排行（數量）' valueKey='qty' />
+              <ErrorBoundary key="brand-qty">
+                <BrandChart data={byBrand} title='品牌銷售排行（數量）' valueKey='qty' />
+              </ErrorBoundary>
             </div>
           </>
         )}
